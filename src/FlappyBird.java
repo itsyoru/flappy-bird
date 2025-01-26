@@ -61,9 +61,14 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
     int gravity = 1;
 
     ArrayList<Pipe> pipes;
+    Random random = new Random();
 
     Timer gameLoop;
     Timer placePipesTimer;
+
+    boolean gameOver = false;
+
+    double score = 0;
 
 
     FlappyBird() {
@@ -80,6 +85,8 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
 
         //Game Logic
         bird = new Bird(birdImg);
+        pipes = new ArrayList<Pipe>();
+
 
         //Place pipes timer
         placePipesTimer = new Timer(1500, new ActionListener() {
@@ -89,6 +96,8 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
             }
         });
 
+        placePipesTimer.start();
+
         //Game Timer
         gameLoop = new Timer(1000/60, this);
         gameLoop.start();
@@ -96,8 +105,21 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
     }
 
     public void placePipes() {
+        // (0-1) * pipeHeight/2 -> (0-256)
+        // 128
+        // 0 - 128 - (0-256) --> pipeHeight/4 -> 3/4 pipeHeight
+
+        int randomPipeY = (int)(pipeY - pipeHeight/4 - Math.random()*(pipeHeight/2));
+        int openingSpace = boardHeight/4;
+        
         Pipe topPipe = new Pipe(topPipeImg);
+        topPipe.y = randomPipeY;
         pipes.add(topPipe);
+
+        Pipe bottomPipe = new Pipe(bottomPipeImg);
+        bottomPipe.y = topPipe.y + pipeHeight + openingSpace;
+        pipes.add(bottomPipe);
+
     }
 
     public void paintComponent(Graphics g) {
@@ -110,6 +132,23 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
         g.drawImage(backgroundImg, 0, 0, boardWidth, boardHeight, null);
         //Bird
         g.drawImage(bird.img, bird.x, bird.y, bird.width, bird.height, null);
+        //Pipes
+        for (int i = 0; i < pipes.size(); i++) {
+            Pipe pipe = pipes.get(i);
+            g.drawImage(pipe.img, pipe.x, pipe.y, pipe.width, pipe.height, null);
+        }
+
+        //Score
+        g.setColor(Color.white);
+        g.setFont(new Font("Airal", Font.PLAIN, 32));
+        if (gameOver) {
+            g.drawString("Game Over: " + String.valueOf((int) score), 10, 35 );
+        }
+
+        else {
+            g.drawString(String.valueOf((int) score), 10, 35);
+        }
+    
     }
 
     public void move() {
@@ -117,12 +156,42 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
         velocityY += gravity;
         bird.y += velocityY;
         bird.y = Math.max(bird.y,0);
+
+        //Pipes
+        for (int i = 0; i < pipes.size(); i++) {
+            Pipe pipe = pipes.get(i);
+            pipe.x += velocityX;
+
+            if(!pipe.passed && bird.x > pipe.x + pipe.width) {
+                pipe.passed = true;
+                score += 0.5; // Because there are 2 pipes
+            }
+
+            if (collision(bird, pipe)) {
+                gameOver = true;
+            }
+        }
+
+        if (bird.y > boardHeight) {
+            gameOver = true;
+        }
+    }
+
+    public boolean collision(Bird a, Pipe b) {
+        return a.x < b.x + b.width &&
+        a.x + a.width > b.x && 
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y;
     }
 
     @Override
     public void actionPerformed(ActionEvent e) {
         move();
         repaint();
+        if (gameOver) {
+            placePipesTimer.stop();
+            gameLoop.stop();
+        }
     }
 
 
@@ -130,6 +199,16 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
     public void keyPressed(KeyEvent e) {
         if (e.getKeyCode() == KeyEvent.VK_SPACE) {
             velocityY = -9;
+            if (gameOver) {
+                //Restart the game by resetting the conditions
+                bird.y = birdY;
+                velocityY = 0;
+                pipes.clear();
+                score = 0;
+                gameOver = false;
+                gameLoop.start();
+                placePipesTimer.start();
+            }
         }
     }
 
